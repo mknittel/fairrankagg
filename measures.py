@@ -18,6 +18,22 @@ def kendall_tau(items, r1, r2):
 
     return cost
 
+def get_alphas(items, output, rankings):
+    alphas = []
+
+    item_pairs = list(combinations(items, 2))
+
+    for pair in item_pairs:
+        item1 = pair[0]
+        item2 = pair[1]
+
+        max_dist = rankings.get_max_dist(item1, item2)
+        out_dist = output.get_dist(item1, item2)
+
+        alphas += [(1.0 * out_dist) / max_dist]
+
+    return alphas
+
 
 def test_kendall_tau():
     for n in range(100):
