@@ -14,7 +14,6 @@ def main():
 
     run_mallows(maxn, maxk, ntrials)
     run_uar(maxn, maxk, ntrials)
-    run_adversarial(maxn, maxk, ntrials)
 
 def run_uar(maxn, maxk, ntrials):
     ns = list(range(50, maxn, 50))
