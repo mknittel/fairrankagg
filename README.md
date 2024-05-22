@@ -1,4 +1,4 @@
-# fairrankagg
+# Individually Fair Rank Aggregation
 
 To reproduce, simply run: python3 main.py
 
