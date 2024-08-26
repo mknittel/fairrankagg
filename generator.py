@@ -51,6 +51,16 @@ def generate_mallows(n, k, theta=0.25):
     return items, ranking_set
     
 
+def generate_from_data(ranking_lists):
+    n = len(ranking_lists[0])
+    items = [Item(i) for i in range(n)]
+
+    list_of_rankings = [Ranking([items[name] for name in ranking]) for ranking in ranking_lists]
+    ranking_set = Ranking_Set(list_of_rankings)
+
+    return items, ranking_set, n
+
+
 def avg_rank(item, rankings):
     rks = rankings.get_rankings()
     k = len(rks)

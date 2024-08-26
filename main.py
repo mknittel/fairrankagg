@@ -164,7 +164,7 @@ def run_mallows_helper(ns, ks, thetas, ntrials, varied):
     plt.savefig('plots/mallows/boxplot_mallows_' + varied + '.png')
     plt.close()
     
-    fig2 = plt.plot(times, columns)
+    fig2 = plt.scatter(columns, times)
     plt.xlabel(xlab)
     plt.ylabel('Runtime')
     plt.savefig('plots/mallows/boxplot_mallows_' + varied + '_runtimes.png')
