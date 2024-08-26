@@ -10,15 +10,15 @@ import xlrd
 
 
 def main():
-    maxn = 51#301
-    maxk = 51#56
+    maxn = 301
+    maxk = 56
     ntrials = 1000
     datasets = {
             "jester": "data/jester-data-1.xls",
         }
 
     #run_on_all_data(datasets, ntrials, k=maxk, n=maxn) 
-    run_mallows(maxn, maxk, ntrials, quick=True)
+    run_mallows(maxn, maxk, ntrials, quick=False)
     #run_uar(maxn, maxk, ntrials)
 
 def run_uar(maxn, maxk, ntrials):
