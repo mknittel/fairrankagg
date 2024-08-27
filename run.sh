@@ -1,7 +1,7 @@
 #!/bin/bash
-mkdir data
-mkdir data/real
-mkdir data/uar
-mkdir data/real
+mkdir plots 
+mkdir plots/mallows
+mkdir plots/uar
+mkdir plots/real
 
 python3 main.py
