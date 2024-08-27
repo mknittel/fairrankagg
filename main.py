@@ -10,15 +10,15 @@ import xlrd
 
 
 def main():
-    maxn = 301
-    maxk = 56
+    maxn = 20#301
+    maxk = 15#56
     ntrials = 1000
     datasets = {
             "jester": "data/jester-data-1.xls",
         }
 
-    #run_on_all_data(datasets, ntrials, k=maxk, n=maxn) 
-    run_mallows(maxn, maxk, ntrials, quick=False)
+    run_on_all_data(datasets, ntrials, k=maxk, n=maxn) 
+    #run_mallows(maxn, maxk, ntrials, quick=False)
     #run_uar(maxn, maxk, ntrials)
 
 def run_uar(maxn, maxk, ntrials):
@@ -207,7 +207,6 @@ def run_on_data(datafile, ntrials, k=0, n=0):
         pivots, output = algorithm.pivot_alg(items, inputs)
         end = time.time()
         runtime = end - start
-        print(runtime)
 
         alphas = measures.get_alphas(items, output, inputs)
         alphas.sort()
