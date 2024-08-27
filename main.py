@@ -10,11 +10,13 @@ import xlrd
 
 
 def main():
-    maxn = 20#301
+    maxn = 50#301
     maxk = 15#56
     ntrials = 1000
     datasets = {
-            "jester": "data/jester-data-1.xls",
+            "jester": "data/jester.xls",
+            "sushi-a": "data/sushi3a.xlsx",
+            "sushi-b": "data/sushi3b.xlsx",
         }
 
     run_on_all_data(datasets, ntrials, k=maxk, n=maxn) 
@@ -174,13 +176,15 @@ def run_mallows_helper(ns, ks, thetas, ntrials, varied):
 def run_on_all_data(datasets, ntrials, k=0, n=0):
     out_data = []
     columns = []
+    times = []
 
     for dataset in datasets.keys():
         columns += [dataset]
         
         datafile = datasets[dataset]
-        avg_alphas, _ = run_on_data(datafile, ntrials, k=k, n=n)
+        avg_alphas, avg_time = run_on_data(datafile, ntrials, k=k, n=n)
         out_data += [avg_alphas]
+        times += [avg_time]
 
     fig, ax = plt.subplots()
 
@@ -193,7 +197,15 @@ def run_on_all_data(datasets, ntrials, k=0, n=0):
     plt.xlabel("Dataset")
     plt.ylabel('Pairwise Alpha Averages')
     plt.savefig('plots/real/boxplot_real.png')
-
+    plt.close()
+   
+    """
+    fig2 = plt.scatter(columns, times)
+    plt.xlabel("Dataset")
+    plt.ylabel('Runtime')
+    plt.savefig('plots/real/boxplot_real_runtimes.png')
+    plt.close()
+    """
 
 def run_on_data(datafile, ntrials, k=0, n=0):
     rank_data = read_data(datafile, k=k, n=n)
@@ -217,23 +229,13 @@ def run_on_data(datafile, ntrials, k=0, n=0):
     return avgs, avg_time
 
 def read_data(datafile, k=0, n=0):
-    scores = pd.read_excel(datafile).to_numpy()
-    print(scores.shape)
+    pd.read_excel(datafile).to_numpy()
     
-    if n > 0 and n < len(scores[0]):
-        scores = scores[:,:n]
-    if k > 0 and k < len(scores):
-        scores = scores[:k,:]
     if not len(scores)%2:
-        print("Truncating odd k")
+        print("Truncating to odd k")
         scores = scores[:-1,:]
 
-    rankings = [scores_to_ranking(row) for row in scores]
-
     return rankings
-
-def scores_to_ranking(row):
-    return np.flip(np.argsort(row))
 
 if __name__ == "__main__":
     main()
