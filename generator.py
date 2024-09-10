@@ -34,10 +34,12 @@ def generate_adversarial(n, k):
     return items, ranking_set
 
 
-def generate_uar(n, k, seed=None):
-    items = [Item(i) for i in range(n)]
+def generate_uar(n, k, seed=None, p=0.5):
     if seed:
         np.random.seed(seed)
+
+    groups = [np.random.binomial(1, p) for i in range(n)]
+    items = [Item(i, group=groups[i]) for i in range(n)]
 
     return items, Ranking_Set([Ranking(np.random.permutation(items).tolist()) for i in range(k)])
 
@@ -51,9 +53,13 @@ def generate_mallows(n, k, theta=0.25):
     return items, ranking_set
     
 
-def generate_from_data(ranking_lists):
+def generate_from_data(ranking_lists, groups=None):
     n = len(ranking_lists[0])
-    items = [Item(i) for i in range(n)]
+
+    if groups is not None:
+        items = [Item(i, groups[i]) for i in range(n)]
+    else:
+        items = [Item(i) for i in range(n)]
 
     list_of_rankings = [Ranking([items[name] for name in ranking]) for ranking in ranking_lists]
     ranking_set = Ranking_Set(list_of_rankings)

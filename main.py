@@ -10,16 +10,38 @@ import xlrd
 
 
 def main():
-    maxn = 50#301
-    maxk = 15#56
-    ntrials = 1000
+    maxn = 301
+    maxk = 80
+    ntrials = 10#100
     datasets = {
-            "jester": "data/jester.xls",
-            "sushi-a": "data/sushi3a.xlsx",
-            "sushi-b": "data/sushi3b.xlsx",
+            "Sushi": {
+                "file": "data/sushia.xlsx",
+                "krange": [None], # Run once on all data
+                "groups": None, # No groups
+            },
+            "Movielens": {
+                "file": "data/movielens.xlsx",
+                "krange": [None], # Run once on all data
+                "groups": "data/movielens_genres.xlsx", # No groups
+                "h": 4,
+            },
+            "Jester": {
+                "file": "data/jester.xlsx",
+                "krange": list(range(5, maxk, 10)),
+                "groups": None, # No groups
+            },
+            "NFL": {
+                "file": "data/nfl_players.xlsx",
+                "krange": list(range(5, maxk, 10)),
+                "groups": "data/nfl_divisions.xlsx",
+                "h": 25,
+            },
         }
+    short_name = "NFL"
+    short_dataset = { short_name: datasets[short_name] }
 
-    run_on_all_data(datasets, ntrials, k=maxk, n=maxn) 
+    run_on_all_data(short_dataset, ntrials)
+    #run_on_all_data(datasets, ntrials) 
     #run_mallows(maxn, maxk, ntrials, quick=False)
     #run_uar(maxn, maxk, ntrials)
 
@@ -152,8 +174,6 @@ def run_mallows_helper(ns, ks, thetas, ntrials, varied):
                 times += [avg_time]
 
     fig, ax = plt.subplots()
-    import pdb
-    #pdb.set_trace()
 
     for position, column in enumerate(columns):
         ax.boxplot(data[position], positions=[position])
@@ -173,67 +193,137 @@ def run_mallows_helper(ns, ks, thetas, ntrials, varied):
     plt.close()
 
 
-def run_on_all_data(datasets, ntrials, k=0, n=0):
-    out_data = []
-    columns = []
-    times = []
-
+def run_on_all_data(datasets, ntrials):
     for dataset in datasets.keys():
-        columns += [dataset]
+        out_data = []
+        out_data2 = []
+        columns = []
+        times = []
+        times2 = []
+        fairnesses = []
+        fairnesses2 = []
+        datafile = datasets[dataset]["file"]
+        rankings = pd.read_excel(datafile).to_numpy()
+        h = datasets[dataset]["h"]
         
-        datafile = datasets[dataset]
-        avg_alphas, avg_time = run_on_data(datafile, ntrials, k=k, n=n)
-        out_data += [avg_alphas]
-        times += [avg_time]
+        groupfile = datasets[dataset]["groups"]
+        if groupfile != None:
+            groups = pd.read_excel(groupfile).to_numpy()
+            groups = groups.reshape((groups.shape[0],))
+        else:
+            groups = None
+        print("Running on", datafile)
 
-    fig, ax = plt.subplots()
+        for k in datasets[dataset]["krange"]:
+            if k == None:
+                k = len(rankings)
+            if k%2 == 0:
+                k -= 1
 
-    for position, column in enumerate(columns):
-        ax.boxplot(out_data[position], positions=[position])
+            rand_inds = np.random.randint(len(rankings), size=k)
+            rand_ranks = rankings[rand_inds]
 
-    ax.set_xticks(range(position+1))
-    ax.set_xticklabels(columns)
-    ax.set_xlim(xmin=-0.5)
-    plt.xlabel("Dataset")
-    plt.ylabel('Pairwise Alpha Averages')
-    plt.savefig('plots/real/boxplot_real.png')
-    plt.close()
+            columns += [k]
+            avg_alphas, avg_time, avg_fairness, avg_alphas2, avg_time2, avg_fairness2 = run_on_data(rand_ranks, ntrials, h=h, groups=groups, k=k)
+
+            out_data += [avg_alphas]
+            times += [avg_time]
+            fairnesses += [avg_fairness]
+            out_data2 += [avg_alphas2]
+            times2 += [avg_time2]
+            fairnesses2 += [avg_fairness2]
+
+        fig, ax = plt.subplots()
+
+        for position, column in enumerate(columns):
+            ax.boxplot(out_data[position], positions=[position])
+            ax.boxplot(out_data2[position], positions=[position])
+
+        ax.set_xticks(range(position+1))
+        ax.set_xticklabels(columns)
+        ax.set_xlim(xmin=-0.5)
+        plt.title(dataset + " Alpha Distributions")
+        plt.xlabel("Number of Rankings")
+        plt.ylabel('Pairwise Alpha Averages')
+        plt.savefig('plots/real/boxplot_' + dataset + '.png')
+        plt.close()
+
+        if groups is not None:
+            fig2 = plt.plot(columns, times, label="Pivot")
+            plt.plot(columns, times2, label="Greedy Fair")
+            plt.title(dataset + " Runtimes")
+            plt.xlabel("Number of Rankings")
+            plt.ylabel('Runtime')
+            plt.legend()
+            plt.savefig('plots/real/boxplot_' + dataset + '_runtimes.png')
+            plt.close()
+
+            fig3 = plt.plot(columns, fairnesses, label="Pivot")
+            plt.plot(columns, fairnesses2, label="Greedy Fair")
+            plt.title(dataset + " Fairness Deviation")
+            plt.xlabel("Number of Rankings")
+            plt.ylabel('Fairness Deviation')
+            plt.legend()
+            plt.savefig('plots/real/boxplot_' + dataset + '_fairness.png')
+            plt.close()
    
-    """
-    fig2 = plt.scatter(columns, times)
-    plt.xlabel("Dataset")
-    plt.ylabel('Runtime')
-    plt.savefig('plots/real/boxplot_real_runtimes.png')
-    plt.close()
-    """
 
-def run_on_data(datafile, ntrials, k=0, n=0):
-    rank_data = read_data(datafile, k=k, n=n)
-    items, inputs, n = generator.generate_from_data(rank_data)
+def run_on_data(rank_data, ntrials, h=None, groups=None, k=None):
+    items, inputs, n = generator.generate_from_data(rank_data, groups=groups)
     n_pairs = int(n*(n-1)/2)
     avgs = [0 for i in range(n_pairs)]
     avg_time = 0
+    print("n", n, "k", k)
+
+    # Only used for group fairness
+    avg_fairness = 0
+    avgs2 = [0 for i in range(n_pairs)]
+    avg_time2 = 0
+    avg_fairness2 = 0
 
     for i in range(ntrials):
+        if i%10 == 9:
+            print("trial", i)
+
+        print("Running")
         start = time.time()
         pivots, output = algorithm.pivot_alg(items, inputs)
         end = time.time()
         runtime = end - start
+        print(runtime)
 
         alphas = measures.get_alphas(items, output, inputs)
         alphas.sort()
 
-        avgs = [avgs[j] + alphas[j]/ntrials for j in range(n_pairs)]
+        deltas = [alphas[j]/ntrials for j in range(n_pairs)]
+        avgs = [avgs[j] + deltas[j] for j in range(n_pairs)]
         avg_time += float(runtime) / ntrials
 
-    return avgs, avg_time
+        if groups is not None:
+            group_names = np.unique(groups)
+            avg_fairness += float(measures.fairness(output, group_names, h)) / ntrials
 
-def read_data(datafile, k=0, n=0):
-    pd.read_excel(datafile).to_numpy()
-    
-    if not len(scores)%2:
+            start2 = time.time()
+            output2 = algorithm.weak_fair_exact(items, inputs, h, group_names)
+            end2 = time.time()
+            runtime2 = end2 - start2
+
+            alphas2 = measures.get_alphas(items, output2, inputs)
+            alphas2.sort()
+
+            deltas2 = [alphas2[j]/ntrials for j in range(n_pairs)]
+            avgs2 = [avgs2[j] + deltas2[j] for j in range(n_pairs)]
+            avg_time2 += float(runtime2) / ntrials
+            avg_fairness2 += float(measures.fairness(output2, group_names, h)) / ntrials
+
+    return avgs, avg_time, avg_fairness, avgs2, avg_time2, avg_fairness2
+
+def read_data(datafile, k=None):
+    rankings = pd.read_excel(datafile, nrows=k).to_numpy()
+   
+    if not len(rankings)%2:
         print("Truncating to odd k")
-        scores = scores[:-1,:]
+        rankings = rankings[:-1,:]
 
     return rankings
 

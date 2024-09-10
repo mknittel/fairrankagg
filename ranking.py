@@ -1,8 +1,9 @@
 
 
 class Item:
-    def __init__(self, name):
+    def __init__(self, name, group=None):
         self.name = str(name)
+        self.group = group
 
     def __str__(self):
         return self.name
