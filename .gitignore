@@ -2,3 +2,5 @@ __pycache__/
 copy.sh
 plots/*
 data/*
+results/*
+main2.py

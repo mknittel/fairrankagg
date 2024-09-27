@@ -1,178 +1,159 @@
 import algorithm
+import csv
+import itertools
 import generator
 import matplotlib.pyplot as plt
 import measures
 import numpy as np
 import pandas as pd
 import ranking
+import sys
 import time
 import xlrd
 
-
-def main():
-    maxn = 301
-    maxk = 80
-    ntrials = 10#100
-    datasets = {
+FULL_DATASETS = {
             "Sushi": {
                 "file": "data/sushia.xlsx",
-                "krange": [None], # Run once on all data
-                "groups": None, # No groups
+                "outpath": "results/sushia.csv",
+                "groups": False,
             },
             "Movielens": {
                 "file": "data/movielens.xlsx",
-                "krange": [None], # Run once on all data
-                "groups": "data/movielens_genres.xlsx", # No groups
+                "groupfile": "data/movielens_genres.xlsx",
+                "outpath": "results/movielens.csv",
                 "h": 4,
+                "groups": True,
             },
             "Jester": {
                 "file": "data/jester.xlsx",
-                "krange": list(range(5, maxk, 10)),
-                "groups": None, # No groups
+                "outpath": "results/jester.csv",
+                "groups": False,
             },
             "NFL": {
                 "file": "data/nfl_players.xlsx",
-                "krange": list(range(5, maxk, 10)),
-                "groups": "data/nfl_divisions.xlsx",
+                "groupfile": "data/nfl_divisions.xlsx",
+                "outpath": "results/nfl.csv",
                 "h": 25,
+                "groups": True,
             },
         }
-    short_name = "NFL"
-    short_dataset = { short_name: datasets[short_name] }
 
-    run_on_all_data(short_dataset, ntrials)
-    #run_on_all_data(datasets, ntrials) 
-    #run_mallows(maxn, maxk, ntrials, quick=False)
-    #run_uar(maxn, maxk, ntrials)
+SHORT_DATASET = { "NFL": FULL_DATASETS["NFL"] }
 
-def run_uar(maxn, maxk, ntrials):
-    ns = list(range(50, maxn, 50))
-    ks = list(range(5, maxk, 10))
+SYN_OPTS = {
+        "Mallows": {
+            "nmax": 1000000,
+            "kmax": 101,
+            "nmin": 100000,
+            "kmin": 11,
+            "nskip": 100000,
+            "kskip": 10,
+            "thetas": [0.001, 0.01, 0.1, 0.5, 0.9],
+            "generator": generator.generate_mallows,
+            "outpath": "results/mallows.csv",
+        },
+        "UAR": {
+            "nmax": 1000000,
+            "kmax": 101,
+            "nmin": 100000,
+            "kmin": 11,
+            "nskip": 100000,
+            "kskip": 10,
+            "thetas": [None],
+            "generator": generator.generate_uar,
+            "outpath": "results/uar.csv",
+        },
+}
 
-    n = [100]
-    k = [5]
+def main(runtype, ntrials, **kwargs):
+    opts = make_opts(runtype, kwargs)
 
-    run_uar_helper(ns, k, ntrials, "n")
-    run_uar_helper(n, ks, ntrials, "k")
+    algs = { "Pivot": algorithm.pivot_alg, "Chakraborty et al.": algorithm.weak_fair_alg }
 
-# Assume one of the lists is a singleton
-def run_uar_helper(ns, ks, ntrials, varied):
-    columns = None
+    if runtype == "synthetic":
+        algs = { "Pivot": algs["Pivot"] }
+        run_all_synthetic(opts, algs, ntrials)
+    elif runtype == "real":
+        run_all_real(opts, algs, ntrials)
 
-    if varied == "n":
-        columns = ns
-        assert(len(ks) == 1)
-        xlab = "Number of Items (n)"
-    elif varied == "k":
-        columns = ks
-        assert(len(ns) == 1)
-        xlab = "Number of Agents (k)"
-    else:
-        print("Error: one input list must be a singleton")
+def make_opts(runtype, kwargs):
+    if runtype == "synthetic":
+        opts = SYN_OPTS
+    elif runtype == "real":
+        opts = FULL_DATASETS
+    elif runtype == "real_short":
+        opts = SHORT_DATASET
 
-    print("Varying", varied)
+    for kwargkey, kwargit in kwargs.items():
+        kwargit = int(kwargit) if kwargit.isdigit() else kwargit
 
-    data = []
+        for datakey in opts.keys():
+            opts[datakey][kwargkey] = kwargit
 
-    for n in ns:
-        for k in ks:
-            print("n", n, "k", k)
-            n_pairs = int(n*(n-1)/2)
-            avgs = [0 for i in range(n_pairs)]
+    return opts
 
-            for i in range(ntrials):
-                items, inputs = generator.generate_uar(n, k)
-                pivots, output = algorithm.pivot_alg(items, inputs)
-                alphas = measures.get_alphas(items, output, inputs)
-                alphas.sort()
+def run_all_synthetic(opts, algs, ntrials):
+    for gentype in opts:
+        run_synthetic(opts[gentype], algs, ntrials)
 
-                avgs = [avgs[j] + alphas[j]/ntrials for j in range(n_pairs)]
+def run_synthetic(genopts, algs, ntrials):
+    ns = list(range(genopts["nmin"], genopts["nmax"], genopts["nskip"]))
+    ks = list(range(genopts["kmin"], genopts["kmax"], genopts["kskip"]))
+    thetas = genopts["thetas"]
 
-            data += [avgs]
+    columns = ["Algorithm", "n", "k", "Trial #", "Runtime", "Start Distances", "alphas", "Cost"]
+    if thetas != [None]:
+        columns.insert(3, "theta")
+    init_csv(genopts["outpath"], columns)
 
-    fig, ax = plt.subplots()
+    params = itertools.product(ns, ks, thetas)
 
-    for position, column in enumerate(columns):
-        ax.boxplot(data[position], positions=[position])
+    for param in params:
+        n = param[0]
+        k = param[1]
+        theta = param[2]
+        
+        print("n", n, "k", k, "theta", theta)
 
-    ax.set_xticks(range(position+1))
-    ax.set_xticklabels(columns)
-    ax.set_xlim(xmin=-0.5)
-    plt.xlabel(xlab)
-    plt.ylabel('Pairwise Alpha Averages')
-    plt.savefig('plots/uar/boxplot_uar_' + varied + '_.png')
+        for i in range(ntrials):
+            if theta != None:
+                items, inputs = genopts["generator"](n, k, theta=theta)
+            else:
+                items, inputs = genopts["generator"](n, k)
 
-def run_mallows(maxn, maxk, ntrials, quick=False):
-    if quick:
-        ns = [25, 50]
-        ks = [5, 15]
-        thetas = [0.01, .1]
-        ntrials = 10
+            for alg_name in algs.keys():
+                row = {
+                        "Algorithm": alg_name,
+                        "n": n,
+                        "k": k,
+                        "Trial #": i,
+                }
+                if theta != None:
+                    row["theta"] = theta
 
-        n = [50]
-        k = [5]
-        theta = [0.01]
-    else:
-        ns = list(range(50, maxn, 50))
-        ks = list(range(5, maxk, 10))
-        thetas = [0.001, 0.01, 0.1, 0.5, 0.9]
+                alg_func = algs[alg_name]
 
-        n = [100]
-        k = [5]
-        theta = [0.01]
+                start = time.time()
+                pivots, output = alg_func(items, inputs)
+                end = time.time()
+                row["Runtime"] = end - start
 
-    run_mallows_helper(ns, k, theta, ntrials, "n")
-    run_mallows_helper(n, ks, theta, ntrials, "k")
-    run_mallows_helper(n, k, thetas, ntrials, "theta")
+                row["alphas"], row["Start Distances"] = measures.get_alphas(items, output, inputs)
+                row["Cost"] = measures.kendall_tau_sum(items, output, inputs)
 
-# Assume two of the lists are singletons
-def run_mallows_helper(ns, ks, thetas, ntrials, varied):
-    columns = None
+                add_csv_row(genopts["outpath"], columns, row)
 
-    if varied == "theta":
-        columns = thetas
-        assert(len(ns) == 1 and len(ks) == 1)
-        xlab = "Theta"
-    elif varied == "n":
-        columns = ns
-        assert(len(thetas) == 1 and len(ks) == 1)
-        xlab = "Number of Items (n)"
-    elif varied == "k":
-        columns = ks
-        assert(len(ns) == 1 and len(thetas) == 1)
-        xlab = "Number of Agents (k)"
-    else:
-        print("Error: two input lists must be singletons")
+def init_csv(fname, columns):
+    with open(fname, 'w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=columns)
+        writer.writeheader()
 
-    print("Varying", varied)
+def add_csv_row(fname, columns, rowdict):
+    with open(fname, 'a', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=columns)
+        writer.writerow(rowdict)
 
-    data = []
-    times = []
-
-    for n in ns:
-        for k in ks:
-            for theta in thetas:
-                print("n", n, "k", k, "theta", theta)
-                n_pairs = int(n*(n-1)/2)
-                avgs = [0 for i in range(n_pairs)]
-                avg_time = 0
-
-                for i in range(ntrials):
-                    items, inputs = generator.generate_mallows(n, k, theta=theta)
-                    start = time.time()
-                    pivots, output = algorithm.pivot_alg(items, inputs)
-                    end = time.time()
-                    runtime = end - start
-
-                    alphas = measures.get_alphas(items, output, inputs)
-                    alphas.sort()
-
-                    avgs = [avgs[j] + alphas[j]/ntrials for j in range(n_pairs)]
-                    avg_time += runtime / ntrials
-
-                data += [avgs]
-                times += [avg_time]
-
+def plot():
     fig, ax = plt.subplots()
 
     for position, column in enumerate(columns):
@@ -192,140 +173,73 @@ def run_mallows_helper(ns, ks, thetas, ntrials, varied):
     plt.savefig('plots/mallows/boxplot_mallows_' + varied + '_runtimes.png')
     plt.close()
 
-
-def run_on_all_data(datasets, ntrials):
+def run_all_real(datasets, algs, ntrials):
     for dataset in datasets.keys():
-        out_data = []
-        out_data2 = []
-        columns = []
-        times = []
-        times2 = []
-        fairnesses = []
-        fairnesses2 = []
-        datafile = datasets[dataset]["file"]
-        rankings = pd.read_excel(datafile).to_numpy()
-        h = datasets[dataset]["h"]
+        run_real(datasets[dataset], algs, ntrials)
+
+def run_real(dataset, algs, ntrials):
+    datafile = dataset["file"]
+    rankings = pd.read_excel(datafile).to_numpy()
+    
+    if dataset["groups"]:
+        groupfile = dataset["groupfile"]
+        groups = pd.read_excel(groupfile).to_numpy()
+        groups = groups.reshape((groups.shape[0],))
+        h = dataset["h"]
+    else:
+        # TODO change when add algs
+        algs = { "Pivot": algs["Pivot"] }
         
-        groupfile = datasets[dataset]["groups"]
-        if groupfile != None:
-            groups = pd.read_excel(groupfile).to_numpy()
-            groups = groups.reshape((groups.shape[0],))
-        else:
-            groups = None
-        print("Running on", datafile)
+    print("Running on", datafile)
 
-        for k in datasets[dataset]["krange"]:
-            if k == None:
-                k = len(rankings)
-            if k%2 == 0:
-                k -= 1
+    if "kmax" not in dataset.keys():
+        ks = [len(rankings)]
+    else:
+        ks = list(range(dataset["kmin"], dataset["kmax"], dataset["kskip"]))
+    ks = [k if k%2 == 1 else k-1 for k in ks] 
 
+    columns = ["Algorithm", "k", "Trial #", "Runtime", "Start Distances", "alphas", "Cost"]
+    if dataset["groups"]:
+        columns += ["Fairness"]
+    init_csv(dataset["outpath"], columns)
+
+    for k in ks:
+        print("k", k)
+
+        for i in range(ntrials):
             rand_inds = np.random.randint(len(rankings), size=k)
             rand_ranks = rankings[rand_inds]
 
-            columns += [k]
-            avg_alphas, avg_time, avg_fairness, avg_alphas2, avg_time2, avg_fairness2 = run_on_data(rand_ranks, ntrials, h=h, groups=groups, k=k)
+            for alg_name in algs.keys():
+                row = {
+                        "Algorithm": alg_name,
+                        "k": k,
+                        "Trial #": i,
+                }
 
-            out_data += [avg_alphas]
-            times += [avg_time]
-            fairnesses += [avg_fairness]
-            out_data2 += [avg_alphas2]
-            times2 += [avg_time2]
-            fairnesses2 += [avg_fairness2]
+                alg_func = algs[alg_name]
 
-        fig, ax = plt.subplots()
+                items, inputs, n = generator.generate_from_data(rand_ranks, groups=groups)
+                if dataset["groups"]:
+                    group_names = np.unique(groups)
 
-        for position, column in enumerate(columns):
-            ax.boxplot(out_data[position], positions=[position])
-            ax.boxplot(out_data2[position], positions=[position])
+                start = time.time()
+                if alg_name == "Pivot":
+                    _, output = alg_func(items, inputs)
+                else:
+                    output = alg_func(items, inputs, h, group_names)
 
-        ax.set_xticks(range(position+1))
-        ax.set_xticklabels(columns)
-        ax.set_xlim(xmin=-0.5)
-        plt.title(dataset + " Alpha Distributions")
-        plt.xlabel("Number of Rankings")
-        plt.ylabel('Pairwise Alpha Averages')
-        plt.savefig('plots/real/boxplot_' + dataset + '.png')
-        plt.close()
+                end = time.time()
+                row["Runtime"] = end - start
 
-        if groups is not None:
-            fig2 = plt.plot(columns, times, label="Pivot")
-            plt.plot(columns, times2, label="Greedy Fair")
-            plt.title(dataset + " Runtimes")
-            plt.xlabel("Number of Rankings")
-            plt.ylabel('Runtime')
-            plt.legend()
-            plt.savefig('plots/real/boxplot_' + dataset + '_runtimes.png')
-            plt.close()
+                row["alphas"], row["Start Distances"] = measures.get_alphas(items, output, inputs)
+                row["Cost"] = measures.kendall_tau_sum(items, output, inputs)
 
-            fig3 = plt.plot(columns, fairnesses, label="Pivot")
-            plt.plot(columns, fairnesses2, label="Greedy Fair")
-            plt.title(dataset + " Fairness Deviation")
-            plt.xlabel("Number of Rankings")
-            plt.ylabel('Fairness Deviation')
-            plt.legend()
-            plt.savefig('plots/real/boxplot_' + dataset + '_fairness.png')
-            plt.close()
-   
+                if dataset["groups"]:
+                    row["Fairness"] = measures.fairness(output, group_names, dataset["h"])
 
-def run_on_data(rank_data, ntrials, h=None, groups=None, k=None):
-    items, inputs, n = generator.generate_from_data(rank_data, groups=groups)
-    n_pairs = int(n*(n-1)/2)
-    avgs = [0 for i in range(n_pairs)]
-    avg_time = 0
-    print("n", n, "k", k)
-
-    # Only used for group fairness
-    avg_fairness = 0
-    avgs2 = [0 for i in range(n_pairs)]
-    avg_time2 = 0
-    avg_fairness2 = 0
-
-    for i in range(ntrials):
-        if i%10 == 9:
-            print("trial", i)
-
-        print("Running")
-        start = time.time()
-        pivots, output = algorithm.pivot_alg(items, inputs)
-        end = time.time()
-        runtime = end - start
-        print(runtime)
-
-        alphas = measures.get_alphas(items, output, inputs)
-        alphas.sort()
-
-        deltas = [alphas[j]/ntrials for j in range(n_pairs)]
-        avgs = [avgs[j] + deltas[j] for j in range(n_pairs)]
-        avg_time += float(runtime) / ntrials
-
-        if groups is not None:
-            group_names = np.unique(groups)
-            avg_fairness += float(measures.fairness(output, group_names, h)) / ntrials
-
-            start2 = time.time()
-            output2 = algorithm.weak_fair_exact(items, inputs, h, group_names)
-            end2 = time.time()
-            runtime2 = end2 - start2
-
-            alphas2 = measures.get_alphas(items, output2, inputs)
-            alphas2.sort()
-
-            deltas2 = [alphas2[j]/ntrials for j in range(n_pairs)]
-            avgs2 = [avgs2[j] + deltas2[j] for j in range(n_pairs)]
-            avg_time2 += float(runtime2) / ntrials
-            avg_fairness2 += float(measures.fairness(output2, group_names, h)) / ntrials
-
-    return avgs, avg_time, avg_fairness, avgs2, avg_time2, avg_fairness2
-
-def read_data(datafile, k=None):
-    rankings = pd.read_excel(datafile, nrows=k).to_numpy()
-   
-    if not len(rankings)%2:
-        print("Truncating to odd k")
-        rankings = rankings[:-1,:]
-
-    return rankings
-
-if __name__ == "__main__":
-    main()
+                add_csv_row(dataset["outpath"], columns, row)
+                
+# Arg1 = runtype, Arg2 = ntrials
+if __name__=='__main__':
+    main(sys.argv[1], int(sys.argv[2]), **dict(arg.split('=') for arg in sys.argv[3:]))

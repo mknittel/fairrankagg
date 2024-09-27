@@ -35,6 +35,24 @@ def pivot_helper(items, rankings, seed):
 
     return pivots, output
 
+def rev_weak_fair_pivot(items, rankings, h, group_names):
+    _, vanilla = (items, rankings)
+    freqs = measures.get_freqs(items)
+
+    return closest_weak_fair(items, vanilla, h, group_names, freqs, freqs)
+
+def rev_weak_fair_exact(items, rankings, h, group_names):
+    vanilla = get_best(items, rankings)
+    freqs = measures.get_freqs(items)
+
+    return closest_weak_fair(items, vanilla, h, group_names, freqs, freqs)
+
+def weak_fair_pivot(items, rankings, h, group_names):
+    freqs = measures.get_freqs(items, group_names)
+    closest_fair = Ranking_Set([closest_weak_fair(ranking, h, group_names, uppers, lowers) for ranking in rankings.rankings])
+
+    return pivot(items, closest_fair)
+
 def weak_fair_exact(items, rankings, h, group_names):
     freqs = measures.get_freqs(items, group_names)
 

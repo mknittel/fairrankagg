@@ -44,7 +44,7 @@ def get_alphas(items, output, rankings):
         max_dists += [max_dist]
         out_dists += [out_dist]
 
-    return alphas
+    return alphas, max_dists
 
 def is_fair(ranking, h, group_names, uppers, lowers):
     groups = {}
