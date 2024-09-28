@@ -73,7 +73,7 @@ def main(runtype, ntrials, **kwargs):
     if runtype == "synthetic":
         algs = { "Pivot": algs["Pivot"] }
         run_all_synthetic(opts, algs, ntrials)
-    elif runtype == "real":
+    elif runtype == "real" or runtype == "real_short":
         run_all_real(opts, algs, ntrials)
 
 def make_opts(runtype, kwargs):
