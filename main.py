@@ -15,9 +15,12 @@ FULL_DATASETS = {
             "Sushi": {
                 "file": "data/sushia.xlsx",
                 "outpath": "results/sushia.csv",
+                "kmax": 5000, # Dataset max = 5000
+                "kmin": 500,
+                "kskip": 500,
                 "groups": False,
             },
-            "Movielens": {
+            "Movielens": { # Dataset k = 5
                 "file": "data/movielens.xlsx",
                 "groupfile": "data/movielens_genres.xlsx",
                 "outpath": "results/movielens.csv",
@@ -27,13 +30,16 @@ FULL_DATASETS = {
             "Jester": {
                 "file": "data/jester.xlsx",
                 "outpath": "results/jester.csv",
+                "kmax": 24983, # Dataset max = 24983
+                "kmin": 5000,
+                "kskip": 1000,
                 "groups": False,
             },
-            "NFL": {
+            "NFL": { # Dataset k = 25
                 "file": "data/nfl_players.xlsx",
                 "groupfile": "data/nfl_divisions.xlsx",
                 "outpath": "results/nfl.csv",
-                "h": 25,
+                "h": 10,
                 "groups": True,
             },
         }
@@ -41,6 +47,17 @@ FULL_DATASETS = {
 SHORT_DATASET = { "NFL": FULL_DATASETS["NFL"] }
 
 SYN_OPTS = {
+        "Adversarial": {
+            "nmax": 1000000,
+            "kmax": 101,
+            "nmin": 100000,
+            "kmin": 11,
+            "nskip": 100000,
+            "kskip": 10,
+            "thetas": [0.001, 0.01, 0.1, 0.5, 0.9],
+            "generator": generator.generate_adversarial_mallows,
+            "outpath": "results/adversarial_mallows.csv",
+        },
         "Mallows": {
             "nmax": 1000000,
             "kmax": 101,
@@ -68,13 +85,10 @@ SYN_OPTS = {
 def main(runtype, ntrials, **kwargs):
     opts = make_opts(runtype, kwargs)
 
-    algs = { "Pivot": algorithm.pivot_alg, "Chakraborty et al.": algorithm.weak_fair_alg }
-
     if runtype == "synthetic":
-        algs = { "Pivot": algs["Pivot"] }
-        run_all_synthetic(opts, algs, ntrials)
+        run_all_synthetic(opts, ntrials)
     elif runtype == "real" or runtype == "real_short":
-        run_all_real(opts, algs, ntrials)
+        run_all_real(opts, ntrials)
 
 def make_opts(runtype, kwargs):
     if runtype == "synthetic":
@@ -92,16 +106,17 @@ def make_opts(runtype, kwargs):
 
     return opts
 
-def run_all_synthetic(opts, algs, ntrials):
+def run_all_synthetic(opts, ntrials):
     for gentype in opts:
-        run_synthetic(opts[gentype], algs, ntrials)
+        run_synthetic(opts[gentype], ntrials)
 
-def run_synthetic(genopts, algs, ntrials):
+def run_synthetic(genopts, ntrials):
     ns = list(range(genopts["nmin"], genopts["nmax"], genopts["nskip"]))
     ks = list(range(genopts["kmin"], genopts["kmax"], genopts["kskip"]))
     thetas = genopts["thetas"]
+    algs = { "Pivot": algorithm.pivot_wrapper }
 
-    columns = ["Algorithm", "n", "k", "Trial #", "Runtime", "Start Distances", "alphas", "Cost"]
+    columns = ["Algorithm", "n", "k", "Trial #", "Runtime", "Distances", "alphas", "Cost"]
     if thetas != [None]:
         columns.insert(3, "theta")
     init_csv(genopts["outpath"], columns)
@@ -134,50 +149,34 @@ def run_synthetic(genopts, algs, ntrials):
                 alg_func = algs[alg_name]
 
                 start = time.time()
-                pivots, output = alg_func(items, inputs)
+                output = alg_func(items, inputs)
                 end = time.time()
                 row["Runtime"] = end - start
 
-                row["alphas"], row["Start Distances"] = measures.get_alphas(items, output, inputs)
+                row["alphas"], row["Distances"] = measures.get_alphas(items, output, inputs)
                 row["Cost"] = measures.kendall_tau_sum(items, output, inputs)
 
                 add_csv_row(genopts["outpath"], columns, row)
+
 
 def init_csv(fname, columns):
     with open(fname, 'w', newline='') as file:
         writer = csv.DictWriter(file, fieldnames=columns)
         writer.writeheader()
 
+
 def add_csv_row(fname, columns, rowdict):
     with open(fname, 'a', newline='') as file:
         writer = csv.DictWriter(file, fieldnames=columns)
         writer.writerow(rowdict)
 
-def plot():
-    fig, ax = plt.subplots()
 
-    for position, column in enumerate(columns):
-        ax.boxplot(data[position], positions=[position])
-
-    ax.set_xticks(range(position+1))
-    ax.set_xticklabels(columns)
-    ax.set_xlim(xmin=-0.5)
-    plt.xlabel(xlab)
-    plt.ylabel('Pairwise Alpha Averages')
-    plt.savefig('plots/mallows/boxplot_mallows_' + varied + '.png')
-    plt.close()
-    
-    fig2 = plt.scatter(columns, times)
-    plt.xlabel(xlab)
-    plt.ylabel('Runtime')
-    plt.savefig('plots/mallows/boxplot_mallows_' + varied + '_runtimes.png')
-    plt.close()
-
-def run_all_real(datasets, algs, ntrials):
+def run_all_real(datasets, ntrials):
     for dataset in datasets.keys():
-        run_real(datasets[dataset], algs, ntrials)
+        run_real(datasets[dataset], ntrials)
 
-def run_real(dataset, algs, ntrials):
+
+def run_real(dataset, ntrials):
     datafile = dataset["file"]
     rankings = pd.read_excel(datafile).to_numpy()
     
@@ -185,11 +184,20 @@ def run_real(dataset, algs, ntrials):
         groupfile = dataset["groupfile"]
         groups = pd.read_excel(groupfile).to_numpy()
         groups = groups.reshape((groups.shape[0],))
+        group_names = np.unique(groups)
         h = dataset["h"]
+        algs = {
+            "Pivot": algorithm.pivot_wrapper,
+            "Best": algorithm.get_best,
+            "Best-Fair": algorithm.weak_fair_wrapper(h, group_names, fair_first=False, alg=algorithm.get_best),
+            "Pivot-Fair": algorithm.weak_fair_wrapper(h, group_names, fair_first=False, alg=algorithm.pivot_wrapper),
+            "Fair-Best": algorithm.weak_fair_wrapper(h, group_names, fair_first=True, alg=algorithm.get_best),
+            "Fair-Pivot": algorithm.weak_fair_wrapper(h, group_names, fair_first=True, alg=algorithm.pivot_wrapper),
+        }
     else:
-        # TODO change when add algs
         algs = { "Pivot": algs["Pivot"] }
         
+
     print("Running on", datafile)
 
     if "kmax" not in dataset.keys():
@@ -198,7 +206,7 @@ def run_real(dataset, algs, ntrials):
         ks = list(range(dataset["kmin"], dataset["kmax"], dataset["kskip"]))
     ks = [k if k%2 == 1 else k-1 for k in ks] 
 
-    columns = ["Algorithm", "k", "Trial #", "Runtime", "Start Distances", "alphas", "Cost"]
+    columns = ["Algorithm", "k", "Trial #", "Runtime", "Distances", "alphas", "Cost"]
     if dataset["groups"]:
         columns += ["Fairness"]
     init_csv(dataset["outpath"], columns)
@@ -218,21 +226,18 @@ def run_real(dataset, algs, ntrials):
                 }
 
                 alg_func = algs[alg_name]
-
-                items, inputs, n = generator.generate_from_data(rand_ranks, groups=groups)
+                
                 if dataset["groups"]:
-                    group_names = np.unique(groups)
+                    items, inputs, n = generator.generate_from_data(rand_ranks, groups=groups)
+                else:
+                    items, inputs, n = generator.generate_from_data(rand_ranks)
 
                 start = time.time()
-                if alg_name == "Pivot":
-                    _, output = alg_func(items, inputs)
-                else:
-                    output = alg_func(items, inputs, h, group_names)
-
+                output = alg_func(items, inputs)
                 end = time.time()
                 row["Runtime"] = end - start
 
-                row["alphas"], row["Start Distances"] = measures.get_alphas(items, output, inputs)
+                row["alphas"], row["Distances"] = measures.get_alphas(items, output, inputs)
                 row["Cost"] = measures.kendall_tau_sum(items, output, inputs)
 
                 if dataset["groups"]:

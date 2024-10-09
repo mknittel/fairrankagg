@@ -3,6 +3,10 @@ import measures
 import random
 from ranking import Ranking_Set, Ranking, Item
 
+def pivot_wrapper(items, rankings, seed=None, h=None, group_names=None):
+    _, output = pivot_alg(items, rankings, seed=seed)
+    return output
+
 def pivot_alg(items, rankings, seed=None):
     pivots, rank_list = pivot_helper(items, rankings, seed)
     ranking = Ranking(rank_list)
@@ -35,33 +39,6 @@ def pivot_helper(items, rankings, seed):
 
     return pivots, output
 
-def rev_weak_fair_pivot(items, rankings, h, group_names):
-    _, vanilla = (items, rankings)
-    freqs = measures.get_freqs(items)
-
-    return closest_weak_fair(items, vanilla, h, group_names, freqs, freqs)
-
-def rev_weak_fair_exact(items, rankings, h, group_names):
-    vanilla = get_best(items, rankings)
-    freqs = measures.get_freqs(items)
-
-    return closest_weak_fair(items, vanilla, h, group_names, freqs, freqs)
-
-def weak_fair_pivot(items, rankings, h, group_names):
-    freqs = measures.get_freqs(items, group_names)
-    closest_fair = Ranking_Set([closest_weak_fair(ranking, h, group_names, uppers, lowers) for ranking in rankings.rankings])
-
-    return pivot(items, closest_fair)
-
-def weak_fair_exact(items, rankings, h, group_names):
-    freqs = measures.get_freqs(items, group_names)
-
-    return weak_fair_alg(items, rankings, h, group_names, freqs, freqs)
-
-def weak_fair_alg(items, rankings, h, group_names, uppers, lowers):
-    closest_fair = Ranking_Set([closest_weak_fair(ranking, h, group_names, uppers, lowers) for ranking in rankings.rankings])
-
-    return get_best(items, closest_fair)
 
 def closest_weak_fair(ranking, h, group_names, uppers, lowers):
     groups = {}
@@ -106,6 +83,7 @@ def closest_weak_fair(ranking, h, group_names, uppers, lowers):
     else:
         print("ERROR no fair ranking")
 
+
 def get_best(items, rankings):
     best = rankings.rankings[0]
     best_kt = float("inf")
@@ -118,6 +96,37 @@ def get_best(items, rankings):
             best_kt = this_kt
 
     return best
+
+
+def weak_fair_wrapper(h, group_names, uppers=None, lowers=None, fair_first=True, alg=get_best):
+    return lambda items, rankings: weak_fair(items, rankings, h, group_names, uppers=uppers, lowers=lowers, fair_first=fair_first, alg=alg)
+
+
+# uppers and lowers are None => run exact
+def weak_fair(items, rankings, h, group_names, uppers=None, lowers=None, fair_first=True, alg=get_best):
+    if uppers == None:
+        assert(lowers == None)
+        uppers = measures.get_freqs(items, group_names)
+        lowers = uppers
+
+    if fair_first:
+        closest_fair = Ranking_Set([closest_weak_fair(ranking, h, group_names, uppers, lowers) for ranking in rankings.rankings])
+
+        return alg(items, closest_fair)
+    else:
+        vanilla_soln = alg(items, rankings)
+
+        return closest_weak_fair(vanilla_soln, h, group_names, uppers, lowers)
+
+
+ALGS = {
+        "Pivot": pivot_wrapper,
+        "Pivot-Fair": weak_fair,
+        "Best-Fair": weak_fair,
+        "Fair-Pivot": weak_fair,
+        "Fair-Best": weak_fair,
+}
+
 
 def test_group():
     n = 7
