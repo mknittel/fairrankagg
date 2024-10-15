@@ -47,6 +47,20 @@ FULL_DATASETS = {
 SHORT_DATASET = { "NFL": FULL_DATASETS["NFL"] }
 
 SYN_OPTS = {
+        "Mallows": {
+            "nmax": 1000,
+            "kmax": 100,
+            "nmin": 100,
+            "kmin": 11,
+            "nskip": 100,
+            "kskip": 10,
+            "thetas": [0.001, 0.01, 0.1, 0.5, 0.9],
+            "generator": generator.generate_mallows,
+            "outpath": "results/mallows.csv",
+        },
+}
+'''
+SYN_OPTS = {
         "Adversarial": {
             "nmax": 1000000,
             "kmax": 101,
@@ -80,7 +94,7 @@ SYN_OPTS = {
             "generator": generator.generate_uar,
             "outpath": "results/uar.csv",
         },
-}
+}'''
 
 def main(runtype, ntrials, **kwargs):
     opts = make_opts(runtype, kwargs)

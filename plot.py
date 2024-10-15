@@ -1,5 +1,4 @@
-import ast
-import csv
+Near-Optimal k-Clustering in the Sliding Window Modelimport csv
 import matplotlib.pyplot as plt
 import numpy as np
 import pdb
