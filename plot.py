@@ -1,4 +1,5 @@
-Near-Optimal k-Clustering in the Sliding Window Modelimport csv
+import ast
+import csv
 import matplotlib.pyplot as plt
 import numpy as np
 import pdb
@@ -100,6 +101,7 @@ def boxplot(data, datatype, algs, xname, yname):
 
     plt.title(datatype + " " + yname + " Distributions")
     plt.xlabel(xname)
+    plt.xticks(fontsize=6)
     plt.ylabel(yname)
     plt.xticks(positions, [int(col) for col in columns])
     if len(algs) > 1:

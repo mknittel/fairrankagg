@@ -20,13 +20,13 @@ FULL_DATASETS = {
                 "kskip": 500,
                 "groups": False,
             },
-            "Movielens": { # Dataset k = 5
-                "file": "data/movielens.xlsx",
-                "groupfile": "data/movielens_genres.xlsx",
-                "outpath": "results/movielens.csv",
-                "h": 4,
-                "groups": True,
-            },
+            #"Movielens": { # Dataset k = 5
+            #    "file": "data/movielens.xlsx",
+            #    "groupfile": "data/movielens_genres.xlsx",
+            #    "outpath": "results/movielens.csv",
+            #    "h": 4,
+            #    "groups": True,
+            #},
             "Jester": {
                 "file": "data/jester.xlsx",
                 "outpath": "results/jester.csv",
@@ -39,6 +39,9 @@ FULL_DATASETS = {
                 "file": "data/nfl_players.xlsx",
                 "groupfile": "data/nfl_divisions.xlsx",
                 "outpath": "results/nfl.csv",
+                "kmax": 25, # Dataset max = 25
+                "kmin": 5,
+                "kskip": 5,
                 "h": 10,
                 "groups": True,
             },
@@ -209,7 +212,7 @@ def run_real(dataset, ntrials):
             "Fair-Pivot": algorithm.weak_fair_wrapper(h, group_names, fair_first=True, alg=algorithm.pivot_wrapper),
         }
     else:
-        algs = { "Pivot": algs["Pivot"] }
+        algs = { "Pivot": algorithm.pivot_wrapper, }
         
 
     print("Running on", datafile)
